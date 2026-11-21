@@ -11,17 +11,22 @@ from app.modules.m4_conflicts.rules import evaluate as stage4
 from app.modules.m5_partitions.rules import evaluate as stage5
 from app.modules.m6_audit.rules import evaluate as stage6
 from app.modules.m7_seals.rules import evaluate as stage7
-STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7]
+from app.modules.m8_quotas.rules import evaluate as stage8
+STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7,stage8]
 def load_sample(name):
     if name not in {"dirty.csv","clean.csv","legacy.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
     return (ROOT/"sample_data"/name).read_bytes()
-def calculate(raw,params=None,stop=6):
+def calculate(raw,params=None,stop=7):
     params=params or {};started=time.monotonic();context={"parameters":params,"raw":raw,"quarantine":[]};stages=[];rows=[]
     for index,stage in enumerate(STAGES[:stop+1]):
         result=stage(raw if index==0 else rows,context)
         result=scalar(result);rows=result["rows"]
         context["quarantine"].extend(result.get("quarantine",[]))
-        if index==0: context["intake"]=result["metrics"]
+        if index==0:
+            context["intake"]=result["metrics"]
+            # 共享额度台账只建一次：授权、对账、占用页、证据导出共用同一结论。
+            from app.quota import build_ledger
+            context["quota_ledger"]=build_ledger(rows,params)
         result["cumulative_quarantine"]=list(context["quarantine"])
         context[MODULES[index][0]]=result
         stages.append(result)

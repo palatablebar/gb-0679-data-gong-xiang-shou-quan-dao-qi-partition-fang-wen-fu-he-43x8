@@ -20,10 +20,21 @@ docker compose exec -T app pytest -q
 - 5. 分区判定：`/partitions`，`/api/partitions`。
 - 6. 访问对账：`/audit`，`/api/audit`。
 - 7. 审计归档：`/seals`，`/api/seals`。
+- 8. 共享额度占用：`/quotas`，`/api/quotas`。
 
 ## 核心规则
 
 拒绝规则优先于允许，授权必须同时命中资源、分区和生效窗；显式拒绝不得被宽授权覆盖。
+
+### 共享额度占用裁决
+
+**裁决：到达时预留（reserve-on-arrival），而非执行后占用再回退。** 区域团队会重试与撤回，执行后记账在并发下必然超用；到达预留以先到先占守住总额度，撤回释放后由台账重算把额度让给排队请求。
+
+- 台账为只追加事件溯源（`app/modules/m8_quotas/ledger.py`），结论只由 `(额度池限额, 事件序列)` 重放得到，同一输入永远得到同一份**每请求唯一占用结论**。
+- 授权定版（M3）、访问对账（M6）、额度占用页（M8）与证据导出共用 `context["quota_ledger"]` 同一结论，不存在第二本账。
+- 事件：`arrive` 到达预留、`retry` 重试（按 `request_id` 幂等，不新增占用）、`withdraw` 撤回（额度失效并触发排队重算）、`settle` 结算转占用、`settle_failed` 结算失败（保留旧版结论仅留痕）。
+- 状态：`held` 已预留、`waiting` 排队、`occupied` 已占用、`withdrawn` 已撤回；非法事件隔离为 `rejected`，不污染额度。
+- 参数 `parameters.quotas.limits` 配置额度池（缺省 `shared-default=8`），`parameters.quotas.events` 显式提供事件；未提供时每条采纳行合成一次单位额到达事件，旧样例无需改造。
 
 ## 演示
 

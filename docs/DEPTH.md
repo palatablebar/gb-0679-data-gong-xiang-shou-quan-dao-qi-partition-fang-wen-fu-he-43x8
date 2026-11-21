@@ -13,6 +13,7 @@
 | M5 分区判定 | 查看并运行分区判定 | `/api/partitions` | `app/modules/m5_partitions/rules.py` | `tests/test_m5.py` |
 | M6 访问对账 | 查看并运行访问对账 | `/api/audit` | `app/modules/m6_audit/rules.py` | `tests/test_m6.py` |
 | M7 审计归档 | 查看并运行审计归档 | `/api/seals` | `app/modules/m7_seals/rules.py` | `tests/test_m7.py` |
+| M8 共享额度占用 | 查看每请求唯一额度结论 | `/api/quotas` | `app/modules/m8_quotas/ledger.py` | `tests/test_m8.py` |
 
 ## 陷阱登记
 
@@ -29,6 +30,11 @@
 | TRAP-07 | 上游结果空值 | 误报拒绝 | 隔离缺失 | `app/values.py` | `tests/test_m3.py::test_real_missing_decision_not_zero` |
 | TRAP-19 | 允许与拒绝重叠 | 后写覆盖 | 拒绝优先且排序证据 | `app/modules/m4_conflicts/rules.py` | `tests/test_m4.py::test_deny_priority_counterexample` |
 | TRAP-23 | 授权到期点 | 多放行一次 | 半开生效窗 | `app/modules/m3_grants/rules.py` | `tests/test_m3.py::test_expiry_endpoint_excluded` |
+| TRAP-31 | 并发记账超用 | 执行后占用再回退 | 到达时预留+先到先占，超额排队 | `app/modules/m8_quotas/ledger.py` | `tests/test_m8.py::test_reserve_on_arrival_holds_within_limit_and_queues_beyond` |
+| TRAP-32 | 重试虚耗额度 | 每次重试新占一笔 | 按 request_id 幂等，重试不新增占用 | `app/modules/m8_quotas/ledger.py` | `tests/test_m8.py::test_retry_is_idempotent_and_never_adds_occupation` |
+| TRAP-33 | 撤回后额度挂死 | 只标记不释放 | 撤回失效并重算排队队列 | `app/modules/m8_quotas/ledger.py` | `tests/test_m8.py::test_withdraw_releases_and_recalculates_waiting_queue` |
+| TRAP-34 | 结算失败改写结论 | 失败即清空占用 | settle_failed 保留旧版结论仅留痕 | `app/modules/m8_quotas/ledger.py` | `tests/test_m8.py::test_settle_failure_keeps_previous_conclusion` |
+| TRAP-35 | 多本账口径分歧 | 各模块各自记账 | 台账流水线入口建一次，授权/对账/导出共用 | `app/quota.py` | `tests/test_m8.py::test_stage_default_limit_synthesizes_arrivals_from_rows` |
 
 ## 对账规则
 

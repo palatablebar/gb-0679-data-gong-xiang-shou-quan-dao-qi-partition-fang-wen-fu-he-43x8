@@ -9,3 +9,9 @@ observed为真实访问执行结果allowed或blocked；reported为上游0/1判�
 业务ID和超大整数按文本保形；Decimal参与数量金额计算，对外序列化为字符串。哨兵集合定义在app/values.py，缺失值不能当零。所有时间带UTC偏移，先转UTC比较，业务日按指定地区划分。区间统一[start,end)。重复业务键保留第一条、完全相同行计重复；值冲突行隔离且保留原值。空文件、全空白、仅表头分开拒绝。
 
 运行清单包括输入sha256、规则版本、参数、生成时刻与耗时。源行编号以CSV解析器的物理结束行号表示，引号内换行不增加记录数。输入超过4MB返回413，非法表头和类型返回422，失效版本复核返回409。
+
+## 共享额度占用（M8）
+
+额度结论按请求号唯一，采用到达时预留：arrive 在限额内转为 held（已预留），超额进入 waiting（排队）且总额度绝不超用；retry 按 request_id 幂等，只累加 retry_count 并保留原结论，不二次预留；withdraw 使 held/waiting/occupied 转为 withdrawn（额度失效），随后按到达顺序重算排队队列，能满足的 waiting 提升为 held；settle 仅允许 held → occupied；settle_failed 不改写 held/occupied，仅累加 settle_failures 并在 trace 记录 rollback_keep_*。
+
+amount 为正 Decimal，缺失按 1；未登记额度池、未到达先作用、重试额度与首达不一致、非法状态迁移均隔离为 rejected 事件，不进入额度合计。状态与轨迹（trace）随每行 quota_* 字段输出，并在归档 CSV 以 quota_<state>/quota_rejected 留痕。
